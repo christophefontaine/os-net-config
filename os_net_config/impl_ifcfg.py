@@ -144,6 +144,7 @@ class IfcfgNetConfig(os_net_config.NetConfig):
         self.ib_interface_data = {}
         self.linuxteam_data = {}
         self.vpp_interface_data = {}
+        self.vpp_sub_interface_data = {}
         self.vpp_bond_data = {}
         self.member_names = {}
         self.renamed_interfaces = {}
@@ -1053,6 +1054,22 @@ class IfcfgNetConfig(os_net_config.NetConfig):
                     % (vpp_interface.name, vpp_interface.pci_dev))
         self.vpp_interface_data[vpp_interface.name] = vpp_interface
 
+    def add_vpp_sub_interface(self, vpp_interface):
+        """Add a VppSubInterface object to the net config object
+
+        :param vpp_interface: The VppSubInterface object to add
+        """
+        vpp_interface.pci_dev = utils.get_pci_address(vpp_interface.name,
+                                                      False)
+        if not vpp_interface.pci_dev:
+            vpp_interface.pci_dev = utils.get_stored_pci_address(
+                vpp_interface.name, False)
+        logger.info('adding vpp sub interface: %s.%s %s'
+                    % (vpp_interface.name, vpp_interface.vlan_id,
+                       vpp_interface.pci_dev))
+        self.vpp_sub_interface_data[(
+            vpp_interface.name, vpp_interface.vlan_id)] = vpp_interface
+
     def add_vpp_bond(self, vpp_bond):
         """Add a VppInterface object to the net config object
 
@@ -1243,6 +1260,7 @@ class IfcfgNetConfig(os_net_config.NetConfig):
         stop_dhclient_interfaces = []
         ovs_needs_restart = False
         vpp_interfaces = self.vpp_interface_data.values()
+        vpp_sub_interfaces = self.vpp_sub_interface_data.values()
         vpp_bonds = self.vpp_bond_data.values()
         ipcmd = utils.iproute2_path()
 
@@ -1649,7 +1667,9 @@ class IfcfgNetConfig(os_net_config.NetConfig):
                 if ib_child_name not in restart_ib_childs:
                     apply_rules.append((ib_child_name, rule_data))
 
-        if self.vpp_interface_data or self.vpp_bond_data:
+        if (self.vpp_interface_data or
+           self.vpp_sub_interface_data or
+           self.vpp_bond_data):
             vpp_path = self.root_dir + vpp_config_path()
             vpp_config = utils.generate_vpp_config(vpp_path, vpp_interfaces,
                                                    vpp_bonds)
@@ -1858,9 +1878,11 @@ class IfcfgNetConfig(os_net_config.NetConfig):
                     logger.info('Restarting VPP')
                     utils.restart_vpp(vpp_interfaces)
 
-                if self.vpp_interface_data:
+                if self.vpp_interface_data or self.vpp_sub_interface_data:
                     logger.info('Updating VPP mapping')
-                    utils.update_vpp_mapping(vpp_interfaces, vpp_bonds)
+                    utils.update_vpp_mapping(vpp_interfaces,
+                                             vpp_sub_interfaces,
+                                             vpp_bonds)
 
             if self.errors:
                 message = 'Failure(s) occurred when applying configuration'

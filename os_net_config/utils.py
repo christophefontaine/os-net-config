@@ -793,12 +793,13 @@ def generate_vpp_config(vpp_config_path, vpp_interfaces, vpp_bonds):
     return data
 
 
-def update_vpp_mapping(vpp_interfaces, vpp_bonds):
+def update_vpp_mapping(vpp_interfaces, vpp_sub_interfaces, vpp_bonds):
     """Verify VPP interface binding and update mapping file
 
     VppException will be raised if interfaces are not properly bound.
 
     :param vpp_interfaces: List of VPP interface objects
+    :param vpp_sub_interfaces: List of VPP sub interface objects
     :param vpp_bonds: List of VPP bond objects
     """
     cli_list = []
@@ -830,6 +831,9 @@ def update_vpp_mapping(vpp_interfaces, vpp_bonds):
                 cli_list.append('set interface ip address %s %s/%s\n'
                                 % (int_info['name'], address.ip,
                                    address.prefixlen))
+            for route in vpp_int.routes:
+                cli_list.append('ip route add %s via %s' %
+                                (route.ip_netmask, route.next_hop))
 
         logger.info('Updating mapping for vpp interface %s:'
                     'pci_dev: %s mac address: %s uio driver: %s'
@@ -848,8 +852,35 @@ def update_vpp_mapping(vpp_interfaces, vpp_bonds):
                 cli_list.append('set interface ip address %s %s/%s'
                                 % (bond_info['name'], address.ip,
                                    address.prefixlen))
+            for route in vpp_bond.routes:
+                cli_list.append('ip route add %s via %s' %
+                                (route.ip_netmask, route.next_hop))
         else:
             raise VppException('Bond %s not found in VPP.' % vpp_bond.name)
+
+    for vpp_sub_int in vpp_sub_interfaces:
+        # TODO: Retreive ifname for bond as well...
+        int_info = _get_vpp_interface(vpp_sub_int.pci_dev,
+                                      tries=2, timeout=5)
+        if not int_info:
+            raise VppException('Interface %s with pci address %s not '
+                               'bound to vpp'
+                               % (vpp_sub_int.name, vpp_sub_int.pci_dev))
+
+        vpp_sub_int.vpp_name = int_info['name'] + '.' + str(vpp_sub_int.vlan_id)
+        vpp_sub_int.vpp_idx = int_info['index']
+        cli_list.append('create sub-interfaces %s %s' % (int_info['name'],
+                                                         str(vpp_sub_int.vlan_id)))
+        cli_list.append('set interface state %s up' % (vpp_sub_int.vpp_name))
+        for address in vpp_sub_int.addresses:
+            cli_list.append('set interface ip address %s %s/%s'
+                            % (vpp_sub_int.vpp_name, address.ip,
+                               address.prefixlen))
+        for route in vpp_sub_int.routes:
+            cli_list.append('ip route add %s via %s %s' %
+                            (route.ip_netmask,
+                             route.next_hop,
+                             vpp_sub_int.vpp_name))
 
     vpp_start_cli = get_file_data(_VPP_EXEC_FILE)
     for cli_line in cli_list:

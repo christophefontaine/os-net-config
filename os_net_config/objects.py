@@ -81,6 +81,8 @@ def object_from_json(json):
         return OvsDpdkBond.from_json(json)
     elif obj_type == "vpp_interface":
         return VppInterface.from_json(json)
+    elif obj_type == "vpp_sub_interface":
+        return VppSubInterface.from_json(json)
     elif obj_type == "vpp_bond":
         return VppBond.from_json(json)
     elif obj_type == "contrail_vrouter":
@@ -1675,6 +1677,35 @@ class VppInterface(_BaseOpts):
         opts = _BaseOpts.base_opts_from_json(json)
         return VppInterface(name, *opts, uio_driver=uio_driver,
                             options=options)
+
+
+class VppSubInterface(_BaseOpts):
+    """Base class for VPP sub interface
+       Only handle VLANs, but an extension to QinQ is possible.
+    """
+    def __init__(self, name, use_dhcp=False, use_dhcpv6=False, addresses=None,
+                 routes=None, mtu=None, primary=False, nic_mapping=None,
+                 persist_mapping=False, defroute=True, dhclient_args=None,
+                 dns_servers=None, nm_controlled=False, onboot=True,
+                 vlan_id=None, options=None):
+        addresses = addresses or []
+        self.vlan_id = vlan_id
+
+        super(VppSubInterface, self).__init__(name, use_dhcp, use_dhcpv6,
+                                              addresses, routes, mtu, primary,
+                                              nic_mapping, persist_mapping,
+                                              defroute, dhclient_args,
+                                              dns_servers, nm_controlled,
+                                              onboot)
+
+    @staticmethod
+    def from_json(json):
+        name = _get_required_field(json, 'name', 'VppSubInterface')
+        vlan_id = _get_required_field(json, 'vlan_id', 'VppSubInterface')
+        options = json.get('options', '')
+
+        opts = _BaseOpts.base_opts_from_json(json)
+        return VppSubInterface(name, *opts, vlan_id=vlan_id, options=options)
 
 
 class VppBond(_BaseOpts):

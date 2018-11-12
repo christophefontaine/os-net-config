@@ -110,6 +110,8 @@ class NetConfig(object):
             self.add_sriov_vf(obj)
         elif isinstance(obj, objects.VppInterface):
             self.add_vpp_interface(obj)
+        elif isinstance(obj, objects.VppSubInterface):
+            self.add_vpp_sub_interface(obj)
         elif isinstance(obj, objects.VppBond):
             self.add_vpp_bond(obj)
             for member in obj.members:
